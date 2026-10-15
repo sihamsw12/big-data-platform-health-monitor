@@ -34,7 +34,6 @@ secrets/
 *.tmp
 *.log
 
-
 # Runtime reports and local incident logs
 reports/*
 !reports/.gitkeep

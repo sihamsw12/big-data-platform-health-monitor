@@ -28,14 +28,22 @@ def test_status_thresholds():
     assert status_for(90, thresholds) == "CRITICAL"
 
 
-@pytest.mark.parametrize(("cpu", "expected"), [(20, "HEALTHY"), (80, "WARNING"), (95, "CRITICAL")])
+@pytest.mark.parametrize(
+    ("cpu", "expected"),
+    [(20, "HEALTHY"), (80, "WARNING"), (95, "CRITICAL")],
+)
 def test_report_status_and_incident_history(config_file, tmp_path, cpu, expected):
     report_path = tmp_path / "reports" / "health.json"
     incident_path = tmp_path / "reports" / "incidents.jsonl"
     metrics = SimpleNamespace(percent=20.0, total=8 * 1024**3, available=6 * 1024**3)
-    report = run_monitor(config_file, report_path, incident_path,
-                         cpu_usage=cpu, memory_metrics=metrics,
-                         disk_usage=(100, 20, 80))
+    report = run_monitor(
+        config_file,
+        report_path,
+        incident_path,
+        cpu_usage=cpu,
+        memory_metrics=metrics,
+        disk_usage=(100, 20, 80),
+    )
     assert report["checks"][-1]["status"] == expected
     assert report["overall_status"] == expected
     assert json.loads(report_path.read_text()) == report
@@ -47,8 +55,14 @@ def test_incident_log_appends(config_file, tmp_path):
     log = tmp_path / "incidents.jsonl"
     metrics = SimpleNamespace(percent=96.0, total=100, available=4)
     for _ in range(2):
-        run_monitor(config_file, tmp_path / "report.json", log,
-                    cpu_usage=10, memory_metrics=metrics, disk_usage=(100, 20, 80))
+        run_monitor(
+            config_file,
+            tmp_path / "report.json",
+            log,
+            cpu_usage=10,
+            memory_metrics=metrics,
+            disk_usage=(100, 20, 80),
+        )
     assert len(log.read_text().splitlines()) == 2
 
 

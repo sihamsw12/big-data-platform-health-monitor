@@ -21,22 +21,49 @@ def check_hadoop_services(config: dict[str, Any]) -> list[dict[str, Any]]:
     results = []
     for component, command in commands:
         if shutil.which(command[0]) is None:
-            results.append({"component": component, "status": "WARNING",
-                            "details": f"{command[0]} CLI not found; check not run."})
+            results.append(
+                {
+                    "component": component,
+                    "status": "WARNING",
+                    "details": f"{command[0]} CLI not found; check not run.",
+                }
+            )
             continue
         try:
-            result = subprocess.run(command, capture_output=True, text=True,
-                                    timeout=timeout, check=False)
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
             ok = result.returncode == 0
-            detail = "CLI command completed successfully." if ok else (
-                f"CLI exited with code {result.returncode}: "
-                f"{(result.stderr or result.stdout).strip()[:300]}")
-            results.append({"component": component, "status": "HEALTHY" if ok else "CRITICAL",
-                            "details": detail})
+            if ok:
+                detail = "CLI command completed successfully."
+            else:
+                output = (result.stderr or result.stdout).strip()[:300]
+                detail = f"CLI exited with code {result.returncode}: {output}"
+            results.append(
+                {
+                    "component": component,
+                    "status": "HEALTHY" if ok else "CRITICAL",
+                    "details": detail,
+                }
+            )
         except subprocess.TimeoutExpired:
-            results.append({"component": component, "status": "CRITICAL",
-                            "details": f"CLI timed out after {timeout} seconds."})
+            results.append(
+                {
+                    "component": component,
+                    "status": "CRITICAL",
+                    "details": f"CLI timed out after {timeout} seconds.",
+                }
+            )
         except OSError as exc:
-            results.append({"component": component, "status": "CRITICAL",
-                            "details": f"Could not execute CLI: {exc}"})
+            results.append(
+                {
+                    "component": component,
+                    "status": "CRITICAL",
+                    "details": f"Could not execute CLI: {exc}",
+                }
+            )
     return results

@@ -1,24 +1,17 @@
 # Big Data Platform Health Monitor
 
-A small Python command-line tool for checking host resources that support data platform workloads. It reports disk, memory and CPU utilization with configurable thresholds, writes a JSON snapshot, and appends non-healthy findings to an incident history. The default checks inspect the local machine only; they do not imply a connection to Cloudera.
+A Python command-line tool that records disk, memory and CPU usage on the machine where it runs. It compares those measurements with configurable thresholds, writes a JSON report and appends non-healthy checks to a local incident log.
 
-## Architecture
+The standard run checks the local host. It does not connect to Cloudera or a Hadoop cluster.
 
-- `monitor.py` validates configuration, gathers local metrics, determines component and overall health, and writes reports.
-- `hadoop_checks.py` optionally invokes installed Hadoop command-line clients for real HDFS and YARN checks.
-- `config.json` contains percentage thresholds and the local filesystem path to inspect.
-- `reports/health-report.json` is the latest snapshot; `reports/incidents.jsonl` is an append-only JSON Lines incident history.
-
-## Requirements
+## Requirements and installation
 
 - Python 3.10 or newer
-- `psutil` (the only runtime dependency; used for portable memory and CPU metrics)
-- `pytest` for the automated test suite
-- Hadoop clients are optional and only needed for `--hadoop`
+- `psutil` for local memory and CPU metrics
+- `pytest` to run the test suite
+- Hadoop command-line clients only if using the optional Hadoop checks
 
-## Installation
-
-### macOS
+On macOS or Linux, create and activate a virtual environment, then install the dependencies:
 
 ```sh
 python3 -m venv .venv
@@ -27,78 +20,55 @@ python -m pip install -r requirements.txt
 python -m pip install pytest
 ```
 
-### Linux
+## Run locally
 
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pip install pytest
-```
-
-## Run
-
-Run from the repository root:
+Run from the project root:
 
 ```sh
 python monitor.py
 ```
 
-The command exits with status 0 when it successfully completes, even if the host is in WARNING or CRITICAL health. Configuration or report-writing failures print an actionable error and exit non-zero.
+The command samples CPU usage over one second. Disk usage is measured for the filesystem containing `disk_path` in `config.json` (`~` means the current user's home directory). Memory and CPU measurements come from `psutil`.
 
-Use custom paths when useful:
+`config.json` sets warning and critical percentages for each resource. A measurement at or above the critical threshold is `CRITICAL`; at or above warning it is `WARNING`; otherwise it is `HEALTHY`. The overall status is the most severe status among the checks.
+
+Each run replaces `reports/health-report.json` with a snapshot containing a UTC timestamp, operating system, measurements and statuses. Non-healthy findings are appended to `reports/incidents.jsonl`, preserving prior entries. A successful run exits with code 0 even when a check reports WARNING or CRITICAL. Configuration and output errors are printed and return a non-zero exit code.
+
+Paths can be supplied on the command line:
 
 ```sh
 python monitor.py --config config.json --report reports/health-report.json --incidents reports/incidents.jsonl
 ```
 
-The latest JSON report includes a UTC timestamp, operating system, per-component measurements and states, and `overall_status`. Each non-HEALTHY check creates one incident entry containing timestamp, component, severity and description. Existing incident entries are preserved.
+## Optional Hadoop CLI checks
 
-## Thresholds
-
-Thresholds are percentages in `config.json`. The warning value must be lower than the critical value, both between 0 and 100. Values at or above critical are CRITICAL; values at or above warning are WARNING.
-
-```json
-"thresholds": {
-  "disk": {"warning": 75, "critical": 90},
-  "memory": {"warning": 75, "critical": 90},
-  "cpu": {"warning": 75, "critical": 90}
-}
-```
-
-The disk check measures the filesystem containing `disk_path`; `~` selects the current user's home filesystem. CPU is sampled over one second through `psutil`.
-
-## Optional Hadoop checks
-
-If Hadoop CLI tools are installed and configured in the environment, opt in explicitly:
+Pass `--hadoop` to run these additional commands:
 
 ```sh
 python monitor.py --hadoop
 ```
 
-This invokes `hdfs dfsadmin -report` and `yarn node -list -all`, with a configurable timeout (`hadoop.timeout_seconds`). A missing CLI is reported as WARNING and is not simulated as a successful connection. A non-zero command result or timeout is reported as CRITICAL. Output is limited to a short diagnostic excerpt. These checks validate command execution, not comprehensive cluster health.
+- HDFS: `hdfs dfsadmin -report`
+- YARN: `yarn node -list -all`
 
-HDFS and YARN checks can be extended with documented Hadoop APIs or Cloudera Manager's documented API, using externally managed authentication and TLS. Hive and Impala could be checked through documented clients or service APIs, with connection settings supplied outside source control. Such integrations require target-specific configuration and credentials; this project does not currently implement them or claim to have tested them. Production monitoring should also cover service-specific health, capacity, replication, queues, query failures, alerting and access controls.
+The commands must be installed and configured in the environment. A missing CLI produces a WARNING and is not treated as a successful check. A command error or timeout produces CRITICAL. A successful exit only confirms that the command ran successfully; it is not a complete assessment of cluster health.
+
+This project does not currently check Hive or Impala and has not been tested against a Cloudera cluster. Connecting those services would require separate, documented API or client checks and target-specific authentication and configuration. No credentials or cluster endpoints are included here.
 
 ## Tests
 
-Install pytest as above and run:
+Install pytest as shown above, then run:
 
 ```sh
-python -m pytest -q
+python3 -m pytest -q
 ```
 
-Tests inject CPU, memory and disk metrics, so health-state assertions do not depend on the test machine's live CPU or memory load.
+Tests inject CPU, memory and disk values, so their status assertions do not depend on the machine's current CPU or memory load. Hadoop command checks are optional and are not part of these local metric tests.
 
 ## Limitations
 
-- This is a single-host snapshot tool, not a daemon, time-series store or alerting system.
-- `psutil` reports operating-system metrics; container limits and platform-specific filesystem semantics can affect interpretation.
-- Optional Hadoop CLI checks need a correctly configured client environment and network/authentication access. A successful command alone does not establish end-to-end service health.
-- The latest report is overwritten on each run. Incident history is appended locally and has no rotation policy.
+- This is a one-shot local snapshot tool, not a background service, alerting system or time-series store.
+- Container limits and operating-system filesystem semantics may affect how resource metrics should be interpreted.
+- Incident history is stored locally and has no rotation or retention policy.
 
-## Future improvements
-
-- Add structured checks for Hive, Impala and Cloudera Manager APIs with secure external credential handling.
-- Add log rotation, retention controls, alert delivery and historical trend storage.
-- Add service-specific thresholds and deployment examples for scheduled execution.
+Possible next steps include log retention, alerts, historical storage and separately tested checks for Hive, Impala or Cloudera Manager.
