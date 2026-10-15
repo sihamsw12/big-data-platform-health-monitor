@@ -1,0 +1,9 @@
+{
+  "thresholds": {
+    "disk": {"warning": 75, "critical": 90},
+    "memory": {"warning": 75, "critical": 90},
+    "cpu": {"warning": 75, "critical": 90}
+  },
+  "disk_path": "~",
+  "hadoop": {"timeout_seconds": 10}
+}
